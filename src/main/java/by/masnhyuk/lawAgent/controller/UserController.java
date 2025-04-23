@@ -1,8 +1,10 @@
 package by.masnhyuk.lawAgent.controller;
 
 import by.masnhyuk.lawAgent.dto.UserDto;
+import by.masnhyuk.lawAgent.entity.Users;
 import by.masnhyuk.lawAgent.service.UserService;
 import lombok.AllArgsConstructor;
+import org.apache.catalina.connector.Response;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,7 +14,7 @@ import java.util.List;
 @CrossOrigin
 @AllArgsConstructor
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/lawAgent")
 public class UserController {
 
     private UserService userService;
@@ -21,6 +23,12 @@ public class UserController {
     public ResponseEntity<UserDto> registerUser(@RequestBody UserDto userDto) {
         userService.register(userDto);
         return new ResponseEntity<>(userDto, HttpStatus.CREATED);
+    }
+
+    @PostMapping("/login")
+    public String login(@RequestBody UserDto user){
+        System.out.println(user);
+        return userService.verify(user);
     }
 
     @GetMapping("/{id}")

@@ -35,4 +35,18 @@ public class Users {
 
     @Column(name = "is_active")
     private String isActive;
+
+    @Override
+    public String toString() {
+        final StringBuilder sb = new StringBuilder("Users{");
+        sb.append("id=").append(id);
+        sb.append(", username='").append(username).append('\'');
+        sb.append(", password='").append(password).append('\'');
+        sb.append(", email='").append(email).append('\'');
+        sb.append(", subscription='").append(subscription).append('\'');
+        sb.append(", createdAt='").append(createdAt).append('\'');
+        sb.append(", isActive='").append(isActive).append('\'');
+        sb.append('}');
+        return sb.toString();
+    }
 }

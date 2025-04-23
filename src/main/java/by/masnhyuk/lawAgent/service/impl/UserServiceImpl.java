@@ -7,6 +7,10 @@ import by.masnhyuk.lawAgent.mapper.UserMapper;
 import by.masnhyuk.lawAgent.repository.UserRepository;
 import by.masnhyuk.lawAgent.service.UserService;
 import lombok.AllArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -15,8 +19,14 @@ import java.util.List;
 @AllArgsConstructor
 public class UserServiceImpl implements UserService {
 
+    @Autowired
     private UserRepository userRepository;
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private AuthenticationManager authenticationManager;
+
+    @Autowired
+    private JWTService jwtService;
 
     @Override
     public UserDto register(UserDto userDto) {
@@ -38,6 +48,13 @@ public class UserServiceImpl implements UserService {
     public List<UserDto> getAllUsers() {
         List<Users> users = userRepository.findAll();
         return users.stream().map((UserMapper::mapToUserDto)).toList();
+    }
+
+    @Override
+    public String verify(UserDto user) {
+        Authentication auth = authenticationManager
+                .authenticate(new UsernamePasswordAuthenticationToken(user.getUsername(), user.getPassword()));
+        return jwtService.generateToken(user.getUsername());
     }
 
 

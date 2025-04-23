@@ -9,5 +9,5 @@ public interface UserService {
     UserDto register(UserDto userDto);
     UserDto getUserById(Long userId);
     List<UserDto> getAllUsers();
-
+    String verify(UserDto user);
 }
