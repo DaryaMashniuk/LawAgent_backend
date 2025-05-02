@@ -2,13 +2,16 @@ package by.masnhyuk.lawAgent.service.impl;
 
 import by.masnhyuk.lawAgent.dto.UserDto;
 import by.masnhyuk.lawAgent.entity.Users;
+import by.masnhyuk.lawAgent.exception.AppException;
 import by.masnhyuk.lawAgent.exception.ResourceNotFoundException;
 import by.masnhyuk.lawAgent.mapper.UserMapper;
 import by.masnhyuk.lawAgent.repository.UserRepository;
 import by.masnhyuk.lawAgent.service.UserService;
 import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -52,10 +55,12 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public String verify(UserDto user) {
-        Authentication auth = authenticationManager
-                .authenticate(new UsernamePasswordAuthenticationToken(user.getUsername(), user.getPassword()));
-        return jwtService.generateToken(user.getUsername());
+        Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(user.getUsername(), user.getPassword()));
+        if (authentication.isAuthenticated()) {
+            return jwtService.generateToken(user.getUsername());
+        } else {
+            throw new AppException("Invalid credentials", HttpStatus.NOT_FOUND);
+        }
     }
-
 
 }
