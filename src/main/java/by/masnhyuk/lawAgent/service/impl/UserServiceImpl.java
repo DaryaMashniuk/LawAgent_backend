@@ -2,65 +2,72 @@ package by.masnhyuk.lawAgent.service.impl;
 
 import by.masnhyuk.lawAgent.dto.UserDto;
 import by.masnhyuk.lawAgent.entity.Users;
-import by.masnhyuk.lawAgent.exception.AppException;
-import by.masnhyuk.lawAgent.exception.ResourceNotFoundException;
+import by.masnhyuk.lawAgent.exception.AuthenticationFailedException;
 import by.masnhyuk.lawAgent.mapper.UserMapper;
 import by.masnhyuk.lawAgent.repository.UserRepository;
 import by.masnhyuk.lawAgent.service.UserService;
+import by.masnhyuk.lawAgent.validator.UserValidator;
 import lombok.AllArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @AllArgsConstructor
 public class UserServiceImpl implements UserService {
 
-    @Autowired
-    private UserRepository userRepository;
-    private PasswordEncoder passwordEncoder;
-    @Autowired
-    private AuthenticationManager authenticationManager;
-
-    @Autowired
-    private JWTService jwtService;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
+    private final UserValidator userValidator;
+    private final JWTServiceImpl jwtServiceImpl;
 
     @Override
-    public UserDto register(UserDto userDto) {
-        Users user = UserMapper.mapToUser(userDto);
-        user.setPassword(passwordEncoder.encode(userDto.getPassword()));
-        Users registeredUser = userRepository.save(user);
-        return UserMapper.mapToUserDto(registeredUser);
-    }
-
-    @Override
-    public UserDto getUserById(Long userId) {
-        Users users = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User does'n exist with id: " + userId)
-                );
-        return UserMapper.mapToUserDto(users);
+    public Optional<UserDto> getUserById(Long userId) {
+        return userRepository.findById(userId)
+                .map(UserMapper::mapToUserDto);
     }
 
     @Override
     public List<UserDto> getAllUsers() {
-        List<Users> users = userRepository.findAll();
-        return users.stream().map((UserMapper::mapToUserDto)).toList();
+        return userRepository.findAll()
+                .stream()
+                .map(UserMapper::mapToUserDto)
+                .toList();
     }
 
     @Override
-    public String verify(UserDto user) {
-        Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(user.getUsername(), user.getPassword()));
-        if (authentication.isAuthenticated()) {
-            return jwtService.generateToken(user.getUsername());
-        } else {
-            throw new AppException("Invalid credentials", HttpStatus.NOT_FOUND);
+    public Optional<UserDto> register(UserDto userDto) {
+        if (!userValidator.validate(userDto)) {
+            return Optional.empty();
         }
+
+        Users user = UserMapper.mapToUser(userDto);
+        user.setPassword(passwordEncoder.encode(userDto.getPassword()));
+        Users registeredUser = userRepository.save(user);
+        return Optional.of(UserMapper.mapToUserDto(registeredUser));
     }
 
+    @Override
+    public Optional<String> login(String username, String password) {
+        try {
+            if (!userValidator.validateLogin(username, password)) {
+                return Optional.empty();
+            }
+
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(username, password)
+            );
+            if (authentication.isAuthenticated()) {
+                return Optional.of(jwtServiceImpl.generateToken(username));
+            }
+            return Optional.empty();
+        } catch (Exception e) {
+            throw new AuthenticationFailedException("Invalid username or password");
+        }
+    }
 }

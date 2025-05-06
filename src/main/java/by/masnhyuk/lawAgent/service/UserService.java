@@ -1,13 +1,12 @@
 package by.masnhyuk.lawAgent.service;
 
 import by.masnhyuk.lawAgent.dto.UserDto;
-
 import java.util.List;
+import java.util.Optional;
 
 public interface UserService {
-
-    UserDto register(UserDto userDto);
-    UserDto getUserById(Long userId);
+    Optional<UserDto> getUserById(Long userId);
     List<UserDto> getAllUsers();
-    String verify(UserDto user);
+    Optional<UserDto> register(UserDto userDto);
+    Optional<String> login(String username, String password);
 }

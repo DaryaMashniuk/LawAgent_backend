@@ -1,17 +1,19 @@
 package by.masnhyuk.lawAgent.controller;
 
-import by.masnhyuk.lawAgent.dto.AuthResponse;
+import by.masnhyuk.lawAgent.dto.ApiResponse;
 import by.masnhyuk.lawAgent.dto.UserDto;
-import by.masnhyuk.lawAgent.entity.Users;
+import by.masnhyuk.lawAgent.exception.AuthenticationFailedException;
+import by.masnhyuk.lawAgent.service.LogoutService;
 import by.masnhyuk.lawAgent.service.UserService;
-import by.masnhyuk.lawAgent.service.impl.JWTService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
-import org.apache.catalina.connector.Response;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -21,32 +23,58 @@ import java.util.Map;
 @RequestMapping("/lawAgent")
 public class UserController {
 
-    private UserService userService;
-    private JWTService jwtService;
+    private final UserService userService;
+    private final LogoutService logoutService;
+    private static final Logger logger = LogManager.getLogger();
+
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> registerUser(@RequestBody UserDto userDto) {
-        UserDto registeredUser = userService.register(userDto);
-        String token = jwtService.generateToken(registeredUser.getUsername());
-        return ResponseEntity.ok(new AuthResponse(token));
+    public ResponseEntity<?> registerUser(@RequestBody UserDto userDto) {
+        return userService.register(userDto)
+                .map(registeredUser -> ResponseEntity.ok(Map.of(
+                        "message", "Registration successful! Please login.",
+                        "username", registeredUser.getUsername(),
+                        "email", registeredUser.getEmail()
+                )))
+                .orElseGet(() -> ResponseEntity.badRequest()
+                        .body(Map.of("error", "Registration failed: invalid data")));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> login(@RequestBody UserDto user){
-        String token = userService.verify(user);
-        Map<String,String> responce = new HashMap<>();
-        responce.put("token",token);
-        return ResponseEntity.ok(responce);
+    public ResponseEntity<?> login(@RequestBody UserDto userDto) {
+        try {
+            String token = userService.login(userDto.getUsername(), userDto.getPassword())
+                    .orElseThrow(() -> new AuthenticationFailedException("Invalid credentials"));
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .body(Map.of(
+                            "token", token,
+                            "message", "Login successful"
+                    ));
+        } catch (AuthenticationFailedException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of(
+                            "error", e.getMessage(),
+                            "status", HttpStatus.UNAUTHORIZED.value()
+                    ));
+        }
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Boolean>> logout(HttpServletRequest request,
+                                                       HttpServletResponse response) {
+        return logoutService.logout(request, response);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<UserDto> getUserById(@PathVariable("id") Long userId){
-        UserDto userDto = userService.getUserById(userId);
-        return ResponseEntity.ok(userDto);
+    public ResponseEntity<UserDto> getUserById(@PathVariable("id") Long userId) {
+        return userService.getUserById(userId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @GetMapping("/users")
     public ResponseEntity<List<UserDto>> getAllUsers() {
-        List<UserDto> userDtos = userService.getAllUsers();
-        return ResponseEntity.ok(userDtos);
+        return ResponseEntity.ok(userService.getAllUsers());
     }
 }

@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -31,10 +33,10 @@ public class Users {
     private String subscription;
 
     @Column(name = "created_at")
-    private String createdAt;
+    private LocalDate createdAt;
 
     @Column(name = "is_active")
-    private String isActive;
+    private Boolean isActive;
 
     @Override
     public String toString() {
