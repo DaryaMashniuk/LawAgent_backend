@@ -1,132 +1,120 @@
 package by.masnhyuk.lawAgent.service.impl;
 
-import by.masnhyuk.lawAgent.config.PravoParserProperties;
+import by.masnhyuk.lawAgent.dto.PdfParseResult;
+import by.masnhyuk.lawAgent.entity.DocumentCategory;
 import by.masnhyuk.lawAgent.entity.DocumentEntity;
-import by.masnhyuk.lawAgent.entity.DocumentVersion;
+import by.masnhyuk.lawAgent.exception.DocumentProcessingException;
+import by.masnhyuk.lawAgent.exception.PdfProcessingException;
 import by.masnhyuk.lawAgent.repository.DocumentRepository;
 import by.masnhyuk.lawAgent.repository.DocumentVersionRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
-import org.jsoup.Jsoup;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jsoup.nodes.Document;
-
 import org.jsoup.nodes.Element;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-
-import java.io.IOException;
-import java.time.LocalDateTime;
+import org.springframework.transaction.annotation.Transactional;
+import by.masnhyuk.lawAgent.creator.DocumentCreator;
+import by.masnhyuk.lawAgent.service.BaseParserService;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
-public class PravoParserServiceImpl {
-    private final PravoParserProperties props;
+public class PravoParserServiceImpl extends BaseParserService {
     private final DocumentRepository documentRepo;
     private final DocumentVersionRepository versionRepo;
+    private final PdfParserService pdfParserService;
+    private final ThematicParserService thematicParserService;
+    private final DocumentCreator documentCreator;
+    private static final Logger log = LogManager.getLogger();
 
     @Scheduled(cron = "${parser.pravo.cron:0 0 9 * * ?}")
+    @Transactional
+    public void autoParseNewDocuments() {
+        log.info("Starting automatic documents parsing");
+        parseNewDocuments();
+        thematicParserService.parseAllThematicDocuments();
+    }
+
+    @Transactional
+    public void manualParseNewDocuments() {
+        log.info("Starting manual documents parsing");
+        //parseNewDocuments();
+        thematicParserService.parseAllThematicDocuments();
+    }
+
+    @Transactional
     public void parseNewDocuments() {
         try {
             String mainUrl = props.getBaseUrl() + props.getNewDocumentsUrl();
-            Document mainPage = Jsoup.connect(mainUrl)
-                    .timeout(props.getTimeoutMs())
-                    .get();
-
-            // Парсим текущие документы (последний день)
-            parseDocumentsPage(mainUrl);
-
-//            // Парсим архив по датам
-//            parseArchiveDates(mainPage);
-
+            Document mainPage = retryableFetchPage(mainUrl);
+            parseDocumentsPage(mainPage);
         } catch (Exception e) {
             log.error("Pravo.by parsing failed", e);
+            throw new DocumentProcessingException("Failed to parse documents", e);
         }
     }
 
-//    private void parseArchiveDates(Document mainPage) {
-//        Elements dateLinks = (Elements) mainPage.select(props.getSelectors().getDateFilter());
-//        dateLinks.stream()
-//                .limit(props.getMaxPages())
-//                .forEach(link -> {
-//                    try {
-//                        String url = props.getBaseUrl() + link.attr("href");
-//                        parseDocumentsPage(url);
-//                        Thread.sleep(props.getTimeoutMs() / 3);
-//                    } catch (Exception e) {
-//                        log.warn("Failed to parse archive page", e);
-//                    }
-//                });
-//    }
+    private void parseDocumentsPage(Document page) {
+        page.select(props.getSelectors().getDocumentSection()).parallelStream()
+                .forEach(this::processDocumentSection);
+    }
 
-    private void parseDocumentsPage(String pageUrl) throws IOException {
-        Document doc = Jsoup.connect(pageUrl)
-                .timeout(props.getTimeoutMs())
-                .get();
+    private void processDocumentSection(Element section) {
+        try {
+            String number = extractDocumentNumber(section);
+            Element link = section.selectFirst(props.getSelectors().getDocumentLink());
+            if (link == null) return;
 
-        // Обрабатываем каждый раздел документов
-        doc.select(props.getSelectors().getDocumentSection()).forEach(section -> {
-            try {
-                String number = section.select(props.getSelectors().getDocumentNumber()).text()
-                        .split("<br>")[0].trim();
+            String title = link.text();
+            String docUrl = props.getBaseUrl() + link.attr("href");
+            String details = section.select(props.getSelectors().getDocumentDetails()).text();
 
-                Element link = section.select(props.getSelectors().getDocumentLink()).first();
-                String title = link.text();
-                String docUrl = props.getBaseUrl() + link.attr("href");
-
-                String details = section.select(props.getSelectors().getDocumentDetails()).text();
-                String typeAndNumber = details.replace(title, "").trim();
-
-                processDocument(number, title, docUrl, typeAndNumber);
-
-            } catch (Exception e) {
-                log.warn("Failed to parse document section", e);
-            }
-        });
+            processDocument(number, title, docUrl, details);
+        } catch (Exception e) {
+            log.warn("Failed to parse document section", e);
+        }
     }
 
     private void processDocument(String number, String title, String url, String details) {
-        try {
-            DocumentEntity doc = documentRepo.findByNumber(number)
-                    .orElseGet(() -> {
-                        DocumentEntity newDoc = new DocumentEntity();
-                        newDoc.setNumber(number);
-                        newDoc.setTitle(title);
-                        newDoc.setSourceUrl(url);
-                        newDoc.setDetails(details);
-                        newDoc.setCategory(detectCategory(title));
-                        return documentRepo.save(newDoc);
-                    });
+        DocumentEntity doc = documentRepo.findByNumber(number)
+                .orElseGet(() -> documentRepo.save(
+                        documentCreator.createDocument(number, title, url, details)
+                ));
 
-            String content = fetchDocumentContent(url);
-            String hash = DigestUtils.sha256Hex(content);
+        PdfParseResult parseResult = retryableFetchPdfContent(url);
+        String textHash = DigestUtils.sha256Hex(parseResult.getTextContent());
+        String pdfHash = DigestUtils.sha256Hex(parseResult.getPdfContent());
 
-            if (versionRepo.findByDocumentAndHash(doc, hash).isEmpty()) {
-                DocumentVersion version = new DocumentVersion();
-                version.setDocument(doc);
-                version.setContent(content);
-                version.setContentHash(hash);
-                version.setCreatedAt(LocalDateTime.now());
-                versionRepo.save(version);
-                log.info("Saved new version for document {}", number);
-            }
-        } catch (Exception e) {
-            log.error("Failed to process document {}", number, e);
+        if (!versionRepo.existsByDocumentAndContentHash(doc, textHash)) {
+            versionRepo.save(
+                    DocumentCreator.createPdfDocumentVersion(
+                            doc,
+                            parseResult.getTextContent(),
+                            parseResult.getPdfContent(),
+                            textHash,
+                            pdfHash
+                    )
+            );
+            log.info("Saved new version for document {}", number);
         }
     }
 
-    private String fetchDocumentContent(String url) throws IOException {
-        Document doc = Jsoup.connect(url)
-                .timeout(props.getTimeoutMs())
-                .get();
-        return doc.select("div.document-content").text(); // Основное содержимое документа
+    private PdfParseResult retryableFetchPdfContent(String url) {
+        return retryOperation(() -> {
+            try {
+                return pdfParserService.parsePdfContent(url);
+            } catch (Exception e) {
+                throw new PdfProcessingException("Failed to parse pdf", e);
+            }
+        }, "Failed to fetch PDF content");
     }
 
-    private String detectCategory(String title) {
-        // Логика определения категории по названию
-        if (title.contains("Постановление")) return "DECREE";
-        if (title.contains("Закон")) return "LAW";
-        return "OTHER";
+    private String extractDocumentNumber(Element section) {
+        String rawNumber = section.select(props.getSelectors().getDocumentNumber()).text();
+        return rawNumber.split("<br>")[0].trim();
     }
+
 }

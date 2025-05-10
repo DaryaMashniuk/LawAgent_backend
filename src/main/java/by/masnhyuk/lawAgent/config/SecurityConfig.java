@@ -105,22 +105,5 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
-    //    @Bean
-//    public UserDetailsService userDetailsService() {
-//
-//        UserDetails user1 = User
-//                .withDefaultPasswordEncoder()
-//                .username("Darya")
-//                .password("Darya1234@")
-//                .build();
-//
-//        UserDetails user2 = User
-//                .withDefaultPasswordEncoder()
-//                .username("Darya1")
-//                .password("Darya1234@")
-//                .build();
-//
-//        return new InMemoryUserDetailsManager(user1,user2);
-//    }
 
 }
