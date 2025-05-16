@@ -4,7 +4,6 @@ import by.masnhyuk.lawAgent.config.PravoParserProperties;
 import by.masnhyuk.lawAgent.dto.PdfParseResult;
 import by.masnhyuk.lawAgent.exception.PdfNotFoundException;
 import by.masnhyuk.lawAgent.exception.PdfTooLargeException;
-import by.masnhyuk.lawAgent.util.AdvancedTextStripper;
 import by.masnhyuk.lawAgent.util.HeadingAwareStripper;
 import io.github.jonathanlink.PDFLayoutTextStripper;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +13,6 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 import technology.tabula.ObjectExtractor;
 import technology.tabula.Page;
@@ -89,18 +87,12 @@ public class PdfParserService {
         PDFTextStripper stripper = new PDFLayoutTextStripper();
 
         StringBuilder html = new StringBuilder();
-        html.append("<html><head><style>\n")
-                .append("body { font-family: Arial, sans-serif; line-height: 1.5; }\n")
-                .append("table { border-collapse: collapse; margin: 1em 0; width: 100%; }\n")
-                .append("td, th { border: 1px solid #ccc; padding: 8px; }\n")
-                .append("h1, h2, h3 { margin: 1em 0 0.5em; }\n")
-                .append("</style></head><body>\n");
 
         for (int pageIndex = 1; pageIndex <= document.getNumberOfPages(); pageIndex++) {
             Page page = extractor.extract(pageIndex);
             List<Table> tables = tableExtractor.extract(page);
 
-            html.append("<div class='page'>\n");
+            html.append("<div class='l-main-content page'>\n");
 
             // Добавляем таблицы
             for (Table table : tables) {
@@ -127,7 +119,7 @@ public class PdfParserService {
             html.append("</div>\n");
         }
 
-        html.append("</body></html>");
+
         return html.toString();
     }
 

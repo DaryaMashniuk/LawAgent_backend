@@ -20,23 +20,28 @@ public class DocumentEntity {
     private UUID id;
 
     @Lob
-    @Column(nullable = false, columnDefinition = "TEXT")
-    @JdbcTypeCode(SqlTypes.LONG32VARCHAR)
+    @Column(nullable = false, length = 1000)
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     private String title;
 
-    @Column(unique = true)
-    private String number;
+    @Column(nullable = true)
+    private Integer number;
 
     @ElementCollection
     @Enumerated(EnumType.STRING)
     @CollectionTable(name = "document_categories", joinColumns = @JoinColumn(name = "document_id"))
     @Column(name = "category")
-    private Set<DocumentCategory> category= new HashSet<>();
+    private Set<DocumentCategory> categories = new HashSet<>();
+
+    @Enumerated(EnumType.STRING)
+    private DocumentCategory groupCategory;
+
+    @Column(name = "source_url")
     private String sourceUrl;
 
     @Lob
-    @Column(nullable = false)
-    @JdbcTypeCode(SqlTypes.LONG32VARCHAR)
+    @Column(nullable = false, columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     private String details;
 
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true)

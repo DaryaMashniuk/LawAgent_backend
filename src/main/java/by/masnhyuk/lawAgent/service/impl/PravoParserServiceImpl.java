@@ -3,10 +3,13 @@ package by.masnhyuk.lawAgent.service.impl;
 import by.masnhyuk.lawAgent.dto.PdfParseResult;
 import by.masnhyuk.lawAgent.entity.DocumentCategory;
 import by.masnhyuk.lawAgent.entity.DocumentEntity;
+import by.masnhyuk.lawAgent.entity.DocumentVersion;
 import by.masnhyuk.lawAgent.exception.DocumentProcessingException;
 import by.masnhyuk.lawAgent.exception.PdfProcessingException;
 import by.masnhyuk.lawAgent.repository.DocumentRepository;
 import by.masnhyuk.lawAgent.repository.DocumentVersionRepository;
+import by.masnhyuk.lawAgent.repository.SubscriptionService;
+import by.masnhyuk.lawAgent.util.DocumentNumberExtractor;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.logging.log4j.LogManager;
@@ -28,6 +31,8 @@ public class PravoParserServiceImpl extends BaseParserService {
     private final PdfParserService pdfParserService;
     private final ThematicParserService thematicParserService;
     private final DocumentCreator documentCreator;
+    private static final DocumentCategory GROUP_CATEGORY = DocumentCategory.RECENT;
+    private final SubscriptionService subscriptionService;
     private static final Logger log = LogManager.getLogger();
 
     @Scheduled(cron = "${parser.pravo.cron:0 0 9 * * ?}")
@@ -64,7 +69,6 @@ public class PravoParserServiceImpl extends BaseParserService {
 
     private void processDocumentSection(Element section) {
         try {
-            String number = extractDocumentNumber(section);
             Element link = section.selectFirst(props.getSelectors().getDocumentLink());
             if (link == null) return;
 
@@ -72,35 +76,50 @@ public class PravoParserServiceImpl extends BaseParserService {
             String docUrl = props.getBaseUrl() + link.attr("href");
             String details = section.select(props.getSelectors().getDocumentDetails()).text();
 
+            Integer number = DocumentNumberExtractor.extractNumber(details);
+            if (number == null) {
+                number = DocumentNumberExtractor.extractNumber(title);
+            }
             processDocument(number, title, docUrl, details);
         } catch (Exception e) {
             log.warn("Failed to parse document section", e);
         }
     }
 
-    private void processDocument(String number, String title, String url, String details) {
-        DocumentEntity doc = documentRepo.findByNumber(number)
+    private void processDocument(Integer number, String title, String url, String details) {
+        DocumentEntity doc = documentRepo.findBySourceUrl(url)
                 .orElseGet(() -> documentRepo.save(
-                        documentCreator.createDocument(number, title, url, details)
+                        documentCreator.createDocument(
+                                number,
+                                title,
+                                url,
+                                details,
+                                GROUP_CATEGORY
+                        )
                 ));
 
+        // Остальной код остается без изменений
         PdfParseResult parseResult = retryableFetchPdfContent(url);
         String textHash = DigestUtils.sha256Hex(parseResult.getTextContent());
         String pdfHash = DigestUtils.sha256Hex(parseResult.getPdfContent());
 
         if (!versionRepo.existsByDocumentAndContentHash(doc, textHash)) {
-            versionRepo.save(
-                    DocumentCreator.createPdfDocumentVersion(
-                            doc,
-                            parseResult.getTextContent(),
-                            parseResult.getPdfContent(),
-                            textHash,
-                            pdfHash
-                    )
+            DocumentVersion savedDocument= DocumentCreator.createPdfDocumentVersion(
+                    doc,
+                    parseResult.getTextContent(),
+                    parseResult.getPdfContent(),
+                    textHash,
+                    pdfHash,
+                    number,
+                    url,
+                    details
             );
+            versionRepo.save(savedDocument);
+            subscriptionService.notifySubscribers(savedDocument);
             log.info("Saved new version for document {}", number);
         }
     }
+
 
     private PdfParseResult retryableFetchPdfContent(String url) {
         return retryOperation(() -> {
@@ -110,11 +129,6 @@ public class PravoParserServiceImpl extends BaseParserService {
                 throw new PdfProcessingException("Failed to parse pdf", e);
             }
         }, "Failed to fetch PDF content");
-    }
-
-    private String extractDocumentNumber(Element section) {
-        String rawNumber = section.select(props.getSelectors().getDocumentNumber()).text();
-        return rawNumber.split("<br>")[0].trim();
     }
 
 }

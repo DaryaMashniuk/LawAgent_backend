@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Date;
 
 @Getter
@@ -22,6 +23,6 @@ public class UserDto {
     private String password;
     private String email;
     private String subscription;
-    private LocalDate createdAt;
+    private LocalDateTime createdAt;
     private Boolean isActive;
 }

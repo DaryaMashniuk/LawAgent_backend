@@ -7,6 +7,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -15,6 +18,15 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "users")
 public class Users {
+    public Users(Long id, String username, String password, String email, String subscription, LocalDateTime createdAt, Boolean isActive) {
+        this.id = id;
+        this.username = username;
+        this.password = password;
+        this.email = email;
+        this.subscription = subscription;
+        this.createdAt = createdAt;
+        this.isActive = isActive;
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -33,10 +45,16 @@ public class Users {
     private String subscription;
 
     @Column(name = "created_at")
-    private LocalDate createdAt;
+    private LocalDateTime createdAt = LocalDateTime.now();
 
     @Column(name = "is_active")
     private Boolean isActive;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    private List<FavouriteDocument> favouriteDocuments = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    private List<Highlight> highlights = new ArrayList<>();
 
     @Override
     public String toString() {

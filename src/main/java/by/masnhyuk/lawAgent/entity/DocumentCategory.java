@@ -8,14 +8,15 @@ import java.util.Set;
 
 @Getter
 public enum DocumentCategory {
-    DECREE("DECREE", "Постановление", "Указ", "Распоряжение"),
-    LAW("LAW", "Закон", "Кодекс"),
-    PROGRAM_ACTS("PROGRAM_ACTS", "Программа", "Концепция"),
-    ADMIN_PROCEDURES("ADMIN_PROCEDURES", "Административный", "Процедура"),
-    BUSINESS("BUSINESS", "Бизнес", "Предприниматель"),
-    STATE_BODIES("STATE_BODIES", "Государственный", "Орган"),
+    DECREE("DECREE", "постановление", "указ", "распоряжение"),
+    LAW("LAW", "закон", "кодекс"),
+    PROGRAM_ACTS("PROGRAM_ACTS", "акты программного характера", "программные акты", "концепция"),
+    ADMIN_PROCEDURES("ADMIN_PROCEDURES", "административные процедуры", "административный регламент"),
+    BUSINESS("BUSINESS", "бизнес", "предприниматель"),
+    STATE_BODIES("STATE_BODIES", "государственный","государственные","государственные органы", "органы", "орган"),
     EAEU_LAW("EAEU_LAW", "ЕАЭС", "Евразийский"),
-    COURT_PRACTICE("COURT_PRACTICE", "Судебный", "Решение суда"),
+    COURT_PRACTICE("COURT_PRACTICE", "судебный","судебная практика", "решение суда"),
+    RECENT("RECENT"),
     OTHER("OTHER");
 
     private final String code;
@@ -38,7 +39,7 @@ public enum DocumentCategory {
 
     public static DocumentCategory fromTitle(String title) {
         for (DocumentCategory category : values()) {
-            if (category.keywords.contains(title)) {
+            if (category.keywords.contains(title.toLowerCase())) {
                 return category;
             }
         }

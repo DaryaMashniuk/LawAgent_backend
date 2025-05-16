@@ -23,7 +23,6 @@ public class CategoryDetectionService {
         String lowerText = text.toLowerCase();
 
         for (DocumentCategory category : DocumentCategory.values()) {
-            if (category == DocumentCategory.OTHER) continue;
 
             for (String keyword : category.getKeywords()) {
                 if (lowerText.contains(keyword.toLowerCase())) {
@@ -31,6 +30,7 @@ public class CategoryDetectionService {
                     break;
                 }
             }
+
         }
 
         return categories.isEmpty() ? Set.of(DocumentCategory.OTHER) : categories;

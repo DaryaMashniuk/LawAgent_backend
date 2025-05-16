@@ -18,5 +18,11 @@ public interface DocumentVersionRepository extends JpaRepository<DocumentVersion
                                            @Param("hash") String hash);
 
     @EntityGraph(attributePaths = "document")
-    List<DocumentVersion> findByDocumentNumber(String number);
+    List<DocumentVersion> findByDocumentNumber(Integer number);
+
+    @Query("SELECT v FROM DocumentVersion v WHERE v.document.id = :documentId ORDER BY v.number DESC LIMIT 2")
+    List<DocumentVersion> findTop2ByDocumentIdOrderByNumberDesc(@Param("documentId") UUID documentId);
+
+    @Query("SELECT v FROM DocumentVersion v WHERE v.document.id = :documentId ORDER BY v.number DESC")
+    List<DocumentVersion> findByDocumentIdOrderByNumberDesc(UUID documentId);
 }

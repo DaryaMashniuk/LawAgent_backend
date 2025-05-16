@@ -9,4 +9,5 @@ public interface UserService {
     List<UserDto> getAllUsers();
     Optional<UserDto> register(UserDto userDto);
     Optional<String> login(String username, String password);
+    UserDto updateUser(Long userId, UserDto userDto);
 }

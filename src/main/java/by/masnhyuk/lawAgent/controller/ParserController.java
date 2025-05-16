@@ -34,24 +34,5 @@ public class ParserController {
         }
     }
 
-    @GetMapping("/{id}/text")
-    public ResponseEntity<String> getDocumentText(@PathVariable UUID id) {
-        DocumentVersion version = versionRepo.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Document version not found"));
 
-        return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_PLAIN)
-                .body(version.getContent());
-    }
-
-    @GetMapping("/{id}/pdf")
-    public ResponseEntity<byte[]> getDocumentPdf(@PathVariable UUID id) {
-        DocumentVersion version = versionRepo.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Document version not found"));
-
-        return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_PDF)
-                .header("Content-Disposition", "inline; filename=\"document.pdf\"")
-                .body(version.getPdfContent());
-    }
 }

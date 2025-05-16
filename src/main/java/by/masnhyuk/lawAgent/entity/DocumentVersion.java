@@ -14,7 +14,7 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = "content")
+@ToString(exclude = {"content", "pdfContent"})
 public class DocumentVersion {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -22,8 +22,10 @@ public class DocumentVersion {
 
     @Lob
     @Column(nullable = false, columnDefinition = "TEXT")
-    @JdbcTypeCode(SqlTypes.LONG32VARCHAR)
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     private String content;
+
+
 
     @Lob
     @JdbcTypeCode(SqlTypes.BINARY)
@@ -43,6 +45,16 @@ public class DocumentVersion {
     @JoinColumn(name = "document_id", nullable = false)
     private DocumentEntity document;
 
+    @Column(name = "source_url")
+    private String sourceUrl;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
+    private String details;
+
+    @Column(nullable = true)
+    private Integer number;
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

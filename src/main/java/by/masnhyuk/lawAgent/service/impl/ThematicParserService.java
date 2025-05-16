@@ -3,10 +3,13 @@ package by.masnhyuk.lawAgent.service.impl;
 import by.masnhyuk.lawAgent.dto.ThematicCategory;
 import by.masnhyuk.lawAgent.entity.DocumentCategory;
 import by.masnhyuk.lawAgent.entity.DocumentEntity;
+import by.masnhyuk.lawAgent.entity.DocumentVersion;
 import by.masnhyuk.lawAgent.exception.DocumentProcessingException;
 import by.masnhyuk.lawAgent.repository.DocumentRepository;
 import by.masnhyuk.lawAgent.repository.DocumentVersionRepository;
+import by.masnhyuk.lawAgent.repository.SubscriptionService;
 import by.masnhyuk.lawAgent.service.BaseParserService;
+import by.masnhyuk.lawAgent.util.DocumentNumberExtractor;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.logging.log4j.LogManager;
@@ -42,7 +45,7 @@ public class ThematicParserService extends BaseParserService {
     private final DocumentVersionRepository versionRepo;
     private final DocumentCreator documentCreator;
     private static final Logger log = LogManager.getLogger();
-    private static final Pattern DOCUMENT_NUMBER_PATTERN = Pattern.compile("№\\s*(\\d+-?\\w*)");
+    private final SubscriptionService subscriptionService;
 
     @Transactional
     public void parseAllThematicDocuments() {
@@ -166,15 +169,18 @@ public class ThematicParserService extends BaseParserService {
                     .findFirst()
                     .orElseGet(() -> link.text().trim().split("\n")[0]);
 
-            // Улучшенное извлечение описания
             String description = link.select("div.item_description, .description").stream()
                     .map(Element::text)
                     .filter(d -> !d.isBlank())
                     .findFirst()
                     .orElse("");
 
+            Integer docNumber = DocumentNumberExtractor.extractNumber(description);
+            if (docNumber == null) {
+                docNumber = DocumentNumberExtractor.extractNumber(title);
+            }
             processThematicDocument(
-                    extractDocumentNumber(description).or(() -> extractDocumentNumber(title)).orElse(null),
+                    docNumber,
                     title.trim(),
                     docUrl,
                     description.trim(),
@@ -185,36 +191,43 @@ public class ThematicParserService extends BaseParserService {
         }
     }
 
-    private Optional<String> extractDocumentNumber(String description) {
-        Matcher matcher = DOCUMENT_NUMBER_PATTERN.matcher(description);
-        return matcher.find() ? Optional.of(matcher.group(1)) : Optional.empty();
-    }
 
     @Transactional
-    private void processThematicDocument(String number, String title, String docUrl,
-                                         String description, DocumentCategory category) {
+    protected void processThematicDocument(Integer docNumber, String title, String docUrl,
+                                           String description, DocumentCategory groupCategory) {
         try {
             String content = retryableFetchHtmlContent(docUrl);
             String hash = DigestUtils.sha256Hex(content);
 
             log.info("Processing document: {}", title);
+            String baseDescription = extractBaseDescription(description);
+            Optional<DocumentEntity> existingDoc = documentRepo.findByBaseTitleAndDetails(title, baseDescription);
 
-            // Поиск или создание документа
-            DocumentEntity doc = documentRepo.findByNumber(number)
-                    .orElseGet(() -> {
-                        DocumentEntity newDoc = documentCreator.createDocument(
-                                number, title, docUrl, description
-                        );
-                        log.info("Creating new document: {}", newDoc);
-                        return documentRepo.save(newDoc);
-                    });
+            DocumentEntity doc;
+            DocumentVersion savedVersion = null;
 
-            // Проверка и сохранение версии
-            if (!versionRepo.existsByDocumentAndContentHash(doc, hash)) {
-                versionRepo.save(DocumentCreator.createDocumentVersion(doc, content, hash));
-                log.info("Saved new version for document: {}", doc.getId());
+            if (existingDoc.isPresent()) {
+                doc = existingDoc.get();
+                if (!versionRepo.existsByDocumentAndContentHash(doc, hash)) {
+                    savedVersion = DocumentCreator.createDocumentVersion(doc, content, hash, description, docNumber, docUrl);
+                    versionRepo.save(savedVersion);
+                    log.info("Saved new version for existing document: {}", doc.getId());
+                }
             } else {
-                log.info("Document already exists with same content hash: {}", hash);
+                doc = documentCreator.createDocument(docNumber, title, docUrl, description, groupCategory);
+                documentRepo.save(doc);
+                savedVersion = DocumentCreator.createDocumentVersion(doc, content, hash, description, docNumber, docUrl);
+                versionRepo.save(savedVersion);
+                log.info("Created new document: {}", doc);
+            }
+
+            // Отправляем уведомления только если создана новая версия
+            if (savedVersion != null) {
+                try {
+                    subscriptionService.notifySubscribers(savedVersion);
+                } catch (Exception e) {
+                    log.error("Failed to send notifications for document {}", doc.getId(), e);
+                }
             }
         } catch (Exception e) {
             log.error("Failed to process document {}: {}", title, e.getMessage());
@@ -222,9 +235,20 @@ public class ThematicParserService extends BaseParserService {
         }
     }
 
+    private String extractBaseDescription(String fullDescription) {
+        String[] splitByFrom = fullDescription.split(" от ");
+        String[] splitByNumber = fullDescription.split(" №");
+
+        String base = splitByFrom[0];
+        if (splitByNumber.length > 1 && splitByNumber[0].length() < base.length()) {
+            base = splitByNumber[0];
+        }
+
+        return base.trim();
+    }
+
     private String fetchRenderedContent(String url) {
         System.setProperty("webdriver.chrome.driver", "C:/Program Files/chromedriver-win64/chromedriver.exe");
-
         ChromeOptions options = new ChromeOptions();
         options.addArguments(
                 "--headless=new", // Новый headless режим
@@ -234,19 +258,15 @@ public class ThematicParserService extends BaseParserService {
                 "--disable-dev-shm-usage",
                 "--window-size=1920,1080"
         );
-
         WebDriver driver = new ChromeDriver(options);
         try {
             driver.get(url);
 
-            // Явное ожидание загрузки контента
             new WebDriverWait(driver, Duration.ofSeconds(10))
                     .until(d -> ((JavascriptExecutor)d)
                             .executeScript("return document.readyState").equals("complete"));
 
-            // Дополнительное ожидание для динамического контента
             Thread.sleep(1000);
-
             return driver.getPageSource();
         } catch (Exception e) {
             log.error("Error fetching rendered content", e);
@@ -260,12 +280,13 @@ public class ThematicParserService extends BaseParserService {
         return retryOperation(() -> {
             Document doc = retryableFetchPage(url);
 
-            // Ищем основной контейнер с текстом документа
-            Element contentContainer = doc.selectFirst("div.Section1");
+            // Сначала пробуем найти основной контейнер документа
+            Element contentContainer = doc.selectFirst(" section.layout, div.Section1, div.document-content, div.content, div.text");
+
             if (contentContainer == null) {
                 log.error("Document content not found. Trying alternative selectors...");
-                // Альтернативные селекторы
-                contentContainer = doc.selectFirst("div.document-content, div.content, div.text");
+                // Альтернативные попытки найти контент
+                contentContainer = doc.selectFirst("div[id^=content], div[class*=content], article, main");
             }
 
             if (contentContainer == null) {
@@ -279,18 +300,26 @@ public class ThematicParserService extends BaseParserService {
                 throw new DocumentProcessingException("Document content container not found");
             }
 
-            // Очистка контента от ненужных элементов
-            contentContainer.select("script, style, noscript, iframe, div.ya-share2, div.backnav, div.linkcart").remove();
+            // Удаляем ненужные элементы
+            contentContainer.select("script, link, meta, div.l-main__header,  noscript, iframe, div.ya-share2, div.backnav, div.linkcart, header, footer, nav").remove();
 
-            // Получаем чистый текст документа
-            String cleanText = contentContainer.text()
-                    .replaceAll("\\s+", " ") // Заменяем множественные пробелы на один
-                    .trim();
-
-            log.debug("Extracted document text: {}", cleanText.substring(0, Math.min(100, cleanText.length())) + "...");
-
-            return cleanText;
+            // Возвращаем HTML только контейнера с документом, а не всей страницы
+            return cleanDocumentHtml(contentContainer.html());
         }, "Failed to fetch document content");
     }
 
+    private String cleanDocumentHtml(String html) {
+        // Удаление различных нежелательных фрагментов
+        html = html.replaceAll("(background:[^;'\"]*;?)", "")
+                .replaceAll(";%", "")
+                .replaceAll("[a-zA-Z]+:#[a-zA-Z]+", "");
+
+        // Остальная очистка
+        html = html.replaceAll("<([a-z]+)[^>]*>\\s*</\\1>", "")
+                .replaceAll("\\s+", " ")
+                .replaceAll("style=\"\"", "")
+                .trim();
+
+        return html;
+    }
 }
