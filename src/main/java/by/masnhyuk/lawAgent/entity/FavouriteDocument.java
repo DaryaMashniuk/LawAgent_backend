@@ -24,7 +24,7 @@ public class FavouriteDocument {
 
     @ManyToOne
     @JoinColumn(name = "document_version_id")
-    private DocumentVersion documentVersion; // Изменили с document на documentVersion
+    private DocumentVersion documentVersion;
 
     private LocalDateTime savedAt;
 }

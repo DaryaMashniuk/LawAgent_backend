@@ -1,16 +1,11 @@
 package by.masnhyuk.lawAgent.controller;
 
 import by.masnhyuk.lawAgent.dto.ApiResponse;
-import by.masnhyuk.lawAgent.dto.ComparisonResult;
 import by.masnhyuk.lawAgent.dto.UserDto;
-import by.masnhyuk.lawAgent.entity.DocumentEntity;
-import by.masnhyuk.lawAgent.entity.DocumentVersion;
 import by.masnhyuk.lawAgent.exception.AuthenticationFailedException;
 import by.masnhyuk.lawAgent.repository.UserRepository;
 import by.masnhyuk.lawAgent.service.LogoutService;
 import by.masnhyuk.lawAgent.service.UserService;
-import by.masnhyuk.lawAgent.service.impl.DocumentComparisonService;
-import by.masnhyuk.lawAgent.service.impl.DocumentsService;
 import by.masnhyuk.lawAgent.service.impl.JWTServiceImpl;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import by.masnhyuk.lawAgent.entity.Users;
-import java.util.UUID;
 
 @CrossOrigin
 @AllArgsConstructor

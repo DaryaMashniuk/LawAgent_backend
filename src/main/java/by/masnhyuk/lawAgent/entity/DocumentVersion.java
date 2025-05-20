@@ -25,8 +25,6 @@ public class DocumentVersion {
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     private String content;
 
-
-
     @Lob
     @JdbcTypeCode(SqlTypes.BINARY)
     @Column(columnDefinition = "BYTEA")

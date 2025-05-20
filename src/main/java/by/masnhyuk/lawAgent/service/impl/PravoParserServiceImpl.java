@@ -9,6 +9,8 @@ import by.masnhyuk.lawAgent.exception.PdfProcessingException;
 import by.masnhyuk.lawAgent.repository.DocumentRepository;
 import by.masnhyuk.lawAgent.repository.DocumentVersionRepository;
 import by.masnhyuk.lawAgent.repository.SubscriptionService;
+import by.masnhyuk.lawAgent.service.PdfParserService;
+import by.masnhyuk.lawAgent.service.ThematicParserService;
 import by.masnhyuk.lawAgent.util.DocumentNumberExtractor;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -16,7 +18,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -98,7 +99,6 @@ public class PravoParserServiceImpl extends BaseParserService {
                         )
                 ));
 
-        // Остальной код остается без изменений
         PdfParseResult parseResult = retryableFetchPdfContent(url);
         String textHash = DigestUtils.sha256Hex(parseResult.getTextContent());
         String pdfHash = DigestUtils.sha256Hex(parseResult.getPdfContent());

@@ -134,7 +134,6 @@ public class HungarianAlgorithm {
 
             parentWorkerByCommittedJob[minSlackJob] = minSlackWorker;
             if (matchWorkerByJob[minSlackJob] == -1) {
-                // augmenting path found
                 int committedJob = minSlackJob;
                 int parentWorker = parentWorkerByCommittedJob[committedJob];
                 while (true) {

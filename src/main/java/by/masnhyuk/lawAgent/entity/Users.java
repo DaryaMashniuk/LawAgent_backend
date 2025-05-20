@@ -53,9 +53,6 @@ public class Users {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<FavouriteDocument> favouriteDocuments = new ArrayList<>();
 
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
-    private List<Highlight> highlights = new ArrayList<>();
-
     @Override
     public String toString() {
         final StringBuilder sb = new StringBuilder("Users{");

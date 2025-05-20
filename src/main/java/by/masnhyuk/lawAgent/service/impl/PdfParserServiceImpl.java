@@ -4,6 +4,7 @@ import by.masnhyuk.lawAgent.config.PravoParserProperties;
 import by.masnhyuk.lawAgent.dto.PdfParseResult;
 import by.masnhyuk.lawAgent.exception.PdfNotFoundException;
 import by.masnhyuk.lawAgent.exception.PdfTooLargeException;
+import by.masnhyuk.lawAgent.service.PdfParserService;
 import by.masnhyuk.lawAgent.util.HeadingAwareStripper;
 import io.github.jonathanlink.PDFLayoutTextStripper;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +32,7 @@ import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
-public class PdfParserService {
+public class PdfParserServiceImpl implements PdfParserService {
     private final PravoParserProperties props;
     private static final int MAX_PDF_SIZE_MB = 10;
     private static final Pattern HEADER_FOOTER_PATTERN =
@@ -39,6 +40,7 @@ public class PdfParserService {
     private static final String WHITESPACE_IN_THE_BEGINNING= "(?m)^\\s+";
     private static final String WHITESPACE_IN_THE_END= "(?m)\\s+$";
 
+    @Override
     public PdfParseResult parsePdfContent(String documentUrl) throws IOException {
         Document docPage = Jsoup.connect(documentUrl)
                 .timeout(props.getTimeoutMs())
@@ -52,7 +54,8 @@ public class PdfParserService {
         return parsePdfFromUrl(pdfUrl);
     }
 
-    private PdfParseResult parsePdfFromUrl(String pdfUrl) throws IOException {
+    @Override
+    public PdfParseResult parsePdfFromUrl(String pdfUrl) throws IOException {
         try (InputStream pdfStream = new URL(pdfUrl).openStream();
              BufferedInputStream bufferedStream = new BufferedInputStream(pdfStream);
              PDDocument document = PDDocument.load(bufferedStream)) {
@@ -67,7 +70,8 @@ public class PdfParserService {
         }
     }
 
-    private void checkPdfSize(PDDocument document, byte[] pdfBytes) {
+    @Override
+    public void checkPdfSize(PDDocument document, byte[] pdfBytes) {
         if (pdfBytes.length > MAX_PDF_SIZE_MB * 1024 * 1024) {
             throw new PdfTooLargeException(
                     String.format("PDF size exceeds maximum allowed %dMB", MAX_PDF_SIZE_MB));
@@ -77,11 +81,13 @@ public class PdfParserService {
 
 
 
-    private String extractAndCleanText(PDDocument document) throws IOException {
+    @Override
+    public String extractAndCleanText(PDDocument document) throws IOException {
         return extractHtmlWithTablesAndHeadings(document);
     }
 
-    private String extractHtmlWithTablesAndHeadings(PDDocument document) throws IOException {
+    @Override
+    public String extractHtmlWithTablesAndHeadings(PDDocument document) throws IOException {
         ObjectExtractor extractor = new ObjectExtractor(document);
         SpreadsheetExtractionAlgorithm tableExtractor = new SpreadsheetExtractionAlgorithm();
         PDFTextStripper stripper = new PDFLayoutTextStripper();
@@ -94,7 +100,6 @@ public class PdfParserService {
 
             html.append("<div class='l-main-content page'>\n");
 
-            // Добавляем таблицы
             for (Table table : tables) {
                 html.append("<table>\n");
                 for (List<RectangularTextContainer> row : table.getRows()) {
@@ -107,7 +112,6 @@ public class PdfParserService {
                 html.append("</table>\n");
             }
 
-            // Добавляем текст с распознаванием заголовков
             PDPage pdPage = document.getPage(pageIndex - 1);
             HeadingAwareStripper headingStripper = new HeadingAwareStripper();
             headingStripper.setStartPage(pageIndex);
@@ -124,7 +128,8 @@ public class PdfParserService {
     }
 
 
-    private String escapeHtml(String text) {
+    @Override
+    public String escapeHtml(String text) {
         return text.replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
@@ -133,7 +138,8 @@ public class PdfParserService {
     }
 
 
-    private String cleanText(String text) {
+    @Override
+    public String cleanText(String text) {
 
 
         return HEADER_FOOTER_PATTERN.matcher(text)
@@ -148,7 +154,8 @@ public class PdfParserService {
                 .trim();
     }
 
-    private String extractPdfUrl(Document docPage) {
+    @Override
+    public String extractPdfUrl(Document docPage) {
         Element pdfObject = docPage.selectFirst("object[type=application/pdf]");
         if (pdfObject != null) {
             return props.getBaseUrl() + pdfObject.attr("data");

@@ -43,7 +43,6 @@ public class SubscriptionService {
         Users user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // Стандартный подход без preview API
         UserSubscription subscription = subscriptionRepository
                 .findByUserAndCategory(user, category)
                 .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
@@ -51,6 +50,7 @@ public class SubscriptionService {
         subscription.setIsActive(false);
         subscriptionRepository.save(subscription);
     }
+
     @Transactional
     public void notifySubscribers(DocumentVersion documentVersion) {
         try {
@@ -87,7 +87,6 @@ public class SubscriptionService {
                     variables.put("documentDescription", documentVersion.getDetails());
                     variables.put("documentLink", generateDocumentVersionLink(documentVersion.getId()));
                     variables.put("unsubscribeLink", generateUnsubscribeLink(user.getId()));
-                    log.info("//////////////////////////////////////////////////////////////////////////////");
                     emailService.sendHtmlEmail(
                             user.getEmail(),
                             "Новый документ в вашей подписке",
